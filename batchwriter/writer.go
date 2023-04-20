@@ -20,29 +20,44 @@ func New(region, tableName string) (bw BatchWriter, err error) {
 		return
 	}
 	bw = BatchWriter{
-		Backoff:   NewBackoff(7),
-		client:    dynamodb.New(sess),
-		tableName: tableName,
+		Backoff:      NewBackoff(7),
+		client:       dynamodb.New(sess),
+		tableName:    tableName,
+		newOperation: putRequest,
+	}
+	return
+}
+
+// NewForDelete creates a new BatchWrite to delete in a DynamoDB table in batches.
+// It uses the default Backoff implementation which provides up to 7 retries
+// costing 25 seconds of latency before failing the entire batch.
+func NewForDelete(region, tableName string) (bw BatchWriter, err error) {
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(region)})
+	if err != nil {
+		return
+	}
+	bw = BatchWriter{
+		Backoff:      NewBackoff(7),
+		client:       dynamodb.New(sess),
+		tableName:    tableName,
+		newOperation: putRequest,
 	}
 	return
 }
 
 // BatchWriter writes to DynamoDB tables using BatchWriteItem.
 type BatchWriter struct {
-	Backoff   Backoff
-	client    *dynamodb.DynamoDB
-	tableName string
+	Backoff      Backoff
+	client       *dynamodb.DynamoDB
+	tableName    string
+	newOperation func(map[string]*dynamodb.AttributeValue) *dynamodb.WriteRequest
 }
 
 // Write to DynamoDB using BatchWriteItem.
 func (bw BatchWriter) Write(records []map[string]*dynamodb.AttributeValue) (err error) {
 	writeRequests := make([]*dynamodb.WriteRequest, len(records))
 	for i := 0; i < len(records); i++ {
-		writeRequests[i] = &dynamodb.WriteRequest{
-			PutRequest: &dynamodb.PutRequest{
-				Item: records[i],
-			},
-		}
+		writeRequests[i] = bw.newOperation(records[i])
 	}
 	requestItems := map[string][]*dynamodb.WriteRequest{
 		bw.tableName: writeRequests,
@@ -95,5 +110,21 @@ func NewBackoff(maxRetries int) Backoff {
 		sleepFor := time.Duration(t) * (100 * time.Millisecond)
 		time.Sleep(sleepFor)
 		return nil
+	}
+}
+
+func putRequest(record map[string]*dynamodb.AttributeValue) *dynamodb.WriteRequest {
+	return &dynamodb.WriteRequest{
+		PutRequest: &dynamodb.PutRequest{
+			Item: record,
+		},
+	}
+}
+
+func deleteRequest(record map[string]*dynamodb.AttributeValue) *dynamodb.WriteRequest {
+	return &dynamodb.WriteRequest{
+		DeleteRequest: &dynamodb.DeleteRequest{
+			Key: record,
+		},
 	}
 }

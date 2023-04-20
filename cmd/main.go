@@ -52,8 +52,12 @@ var remoteFlag = flag.Bool("remote", false, "Set when the import should be carri
 // Global configuration.
 var numericFieldsFlag = flag.String("numericFields", "", "A comma separated list of fields that are numeric.")
 var booleanFieldsFlag = flag.String("booleanFields", "", "A comma separated list of fields that are boolean.")
+var mapFieldsFlag = flag.String("mapFields", "", "A comma separated list of fields that are maps.")
 var delimiterFlag = flag.String("delimiter", "comma", "The delimiter of the CSV file. Use the string 'tab' or 'comma'")
 var concurrencyFlag = flag.Int("concurrency", 8, "Number of imports to execute in parallel.")
+
+// Command flag
+var deleteFlag = flag.Bool("delete", false, "Set to use delete mode. Will delete any item defined in the provided CSV file. Local only for now")
 
 func delimiter(s string) rune {
 	if s == "," || s == "\t" {
@@ -102,6 +106,7 @@ func main() {
 	}
 	numericFields := strings.Split(*numericFieldsFlag, ",")
 	booleanFields := strings.Split(*booleanFieldsFlag, ",")
+	mapFields := strings.Split(*mapFieldsFlag, ",")
 	localFile := *inputFileFlag != ""
 	remoteFile := *bucketRegionFlag != "" || *bucketNameFlag != "" || *bucketKeyFlag != ""
 	if localFile && remoteFile {
@@ -109,6 +114,9 @@ func main() {
 	}
 	if remoteFile && (*bucketRegionFlag == "" || *bucketNameFlag == "" || *bucketKeyFlag == "") {
 		printUsageAndExit("Must pass values for all of the bucketRegion, bucketName and bucketKey arguments if a localFile argument is omitted.")
+	}
+	if remoteFile && *deleteFlag {
+		printUsageAndExit("Delete only supported using local CSV for now")
 	}
 	if *remoteFlag {
 		if !remoteFile {
@@ -147,7 +155,11 @@ func main() {
 		inputName = fmt.Sprintf("s3://%s/%s (%s)", url.PathEscape(*bucketNameFlag), url.PathEscape(*bucketKeyFlag), *bucketRegionFlag)
 		input = func() (io.ReadCloser, error) { return s3Get(*bucketRegionFlag, *bucketNameFlag, *bucketKeyFlag) }
 	}
-	importLocal(input, inputName, numericFields, booleanFields, delimiter(*delimiterFlag), *tableRegionFlag, *tableNameFlag, *concurrencyFlag)
+	if *deleteFlag {
+		deleteLocal(input, inputName, numericFields, booleanFields, mapFields, delimiter(*delimiterFlag), *tableRegionFlag, *tableNameFlag, *concurrencyFlag)
+	} else {
+		importLocal(input, inputName, numericFields, booleanFields, mapFields, delimiter(*delimiterFlag), *tableRegionFlag, *tableNameFlag, *concurrencyFlag)
+	}
 }
 
 func setLambdaFunctionS3Location(template map[string]interface{}, zipLocation string) {
@@ -427,7 +439,7 @@ func s3Get(region, bucket, key string) (io.ReadCloser, error) {
 	return goo.Body, err
 }
 
-func importLocal(input func() (io.ReadCloser, error), inputName string, numericFields, booleanFields []string, delimiter rune, tableRegion, tableName string, concurrency int) {
+func importLocal(input func() (io.ReadCloser, error), inputName string, numericFields, booleanFields, mapFields []string, delimiter rune, tableRegion, tableName string, concurrency int) {
 	logger := log.Default.With(zap.String("input", inputName),
 		zap.String("tableRegion", tableRegion),
 		zap.String("tableName", tableName))
@@ -449,6 +461,7 @@ func importLocal(input func() (io.ReadCloser, error), inputName string, numericF
 	conf := csvtodynamo.NewConfiguration()
 	conf.AddNumberKeys(numericFields...)
 	conf.AddBoolKeys(booleanFields...)
+	conf.AddMapKeys(mapFields...)
 	reader, err := csvtodynamo.NewConverter(csvr, conf)
 	if err != nil {
 		logger.Fatal("failed to create CSV reader", zap.Error(err))
@@ -459,6 +472,65 @@ func importLocal(input func() (io.ReadCloser, error), inputName string, numericF
 		logger.Fatal("failed to create batch writer", zap.Error(err))
 	}
 
+	runBatch(concurrency, batchWriter, logger, duration, start, reader)
+}
+
+func deleteLocal(input func() (io.ReadCloser, error), inputName string, numericFields, booleanFields, mapFields []string, delimiter rune, tableRegion, tableName string, concurrency int) {
+	logger := log.Default.With(zap.String("input", inputName),
+		zap.String("tableRegion", tableRegion),
+		zap.String("tableName", tableName))
+
+	logger.Info("starting local delete")
+
+	start := time.Now()
+	var duration time.Duration
+
+	// Create dependencies.
+	f, err := input()
+	if err != nil {
+		logger.Fatal("failed to open input file", zap.Error(err))
+	}
+	defer f.Close()
+
+	// Load keys from table - we'll only extract those
+	logger.Info("querying table to get keys")
+	sess, err := session.NewSession(&aws.Config{Region: aws.String(tableRegion)})
+	if err != nil {
+		logger.Fatal("failed to open Dynamo session", zap.Error(err))
+	}
+	client := dynamodb.New(sess)
+	tableDesc, err := client.DescribeTable(&dynamodb.DescribeTableInput{
+		TableName: &tableName,
+	})
+	if err != nil {
+		logger.Fatal("failed to describe table "+tableName, zap.Error(err))
+	}
+	var recordKeys []string
+	for _, element := range tableDesc.Table.KeySchema {
+		recordKeys = append(recordKeys, *element.AttributeName)
+	}
+
+	csvr := csv.NewReader(f)
+	csvr.Comma = delimiter
+	conf := csvtodynamo.NewConfiguration()
+	conf.AddNumberKeys(numericFields...)
+	conf.AddBoolKeys(booleanFields...)
+	conf.AddMapKeys(mapFields...)
+	conf.AddKeyColumns(recordKeys...)
+	reader, err := csvtodynamo.NewConverter(csvr, conf)
+	if err != nil {
+		logger.Fatal("failed to create CSV reader", zap.Error(err))
+	}
+
+	batchWriter, err := batchwriter.NewForDelete(tableRegion, tableName)
+	if err != nil {
+		logger.Fatal("failed to create batch writer", zap.Error(err))
+	}
+
+	runBatch(concurrency, batchWriter, logger, duration, start, reader)
+}
+
+func runBatch(concurrency int, batchWriter batchwriter.BatchWriter, logger *zap.Logger, duration time.Duration, start time.Time, reader *csvtodynamo.Converter) {
 	var batchCount int64 = 1
 	var recordCount int64
 

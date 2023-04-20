@@ -2,15 +2,18 @@ package csvtodynamo
 
 import (
 	"encoding/csv"
-
+	"encoding/json"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	_ "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
 
 // Converter converts CSV to DynamoDB records.
 type Converter struct {
-	r           *csv.Reader
-	conf        *Configuration
-	columnNames []string
+	r                    *csv.Reader
+	conf                 *Configuration
+	columnNames          []string
+	columnNamesToInclude map[string]bool
 }
 
 type keyConverter func(s string) *dynamodb.AttributeValue
@@ -26,6 +29,7 @@ func NewConfiguration() *Configuration {
 type Configuration struct {
 	KeyToConverter map[string]keyConverter
 	Columns        []string
+	KeyColumns     []string
 }
 
 // AddStringKeys add string keys to the configuration.
@@ -52,7 +56,27 @@ func (conf *Configuration) AddBoolKeys(s ...string) *Configuration {
 	return conf
 }
 
+func (conf *Configuration) AddMapKeys(s ...string) *Configuration {
+	for _, k := range s {
+		conf.KeyToConverter[k] = mapValue
+	}
+	return conf
+}
+
+func (conf *Configuration) AddKeyColumns(s ...string) *Configuration {
+	for _, k := range s {
+		conf.KeyColumns = append(conf.KeyColumns, k)
+	}
+	return conf
+}
+
 func (c *Converter) init() error {
+	if len(c.conf.KeyColumns) > 0 {
+		c.columnNamesToInclude = make(map[string]bool)
+		for _, k := range c.conf.KeyColumns {
+			c.columnNamesToInclude[k] = true
+		}
+	}
 	if len(c.conf.Columns) > 0 {
 		c.columnNames = c.conf.Columns
 		return nil
@@ -89,6 +113,9 @@ func (c *Converter) Read() (items map[string]*dynamodb.AttributeValue, err error
 	}
 	items = make(map[string]*dynamodb.AttributeValue, len(record))
 	for i, column := range c.columnNames {
+		if len(c.columnNamesToInclude) > 0 && !c.columnNamesToInclude[column] {
+			continue
+		}
 		if len(record[i]) != 0 {
 			items[column] = c.dynamoValue(column, record[i])
 		}
@@ -129,6 +156,14 @@ func boolValue(s string) *dynamodb.AttributeValue {
 		return v
 	}
 	return falseValue
+}
+
+func mapValue(s string) *dynamodb.AttributeValue {
+	var x map[string]interface{}
+	json.Unmarshal([]byte(s), &x)
+	// transform to AttributeValue
+	av, _ := dynamodbattribute.MarshalMap(x)
+	return (&dynamodb.AttributeValue{}).SetM(av)
 }
 
 var trueValue = (&dynamodb.AttributeValue{}).SetBOOL(true)

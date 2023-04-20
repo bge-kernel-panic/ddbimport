@@ -75,6 +75,23 @@ func TestConverter(t *testing.T) {
 			},
 		},
 		{
+			name: "maps can be identified",
+			input: strings.Join([]string{
+				"one,three",
+				`"{""one"":1,""two"":""2""}","{""three"":3}"`,
+			}, "\n"),
+			config: NewConfiguration().AddMapKeys("one"),
+			expected: []map[string]*dynamodb.AttributeValue{
+				{
+					"one": &dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
+						"one": &dynamodb.AttributeValue{N: aws.String("1")},
+						"two": &dynamodb.AttributeValue{S: aws.String("2")},
+					}},
+					"three": &dynamodb.AttributeValue{S: aws.String(`{"three":3}`)},
+				},
+			},
+		},
+		{
 			name: "strings are handled",
 			input: strings.Join([]string{
 				"a,b,c",
@@ -112,6 +129,20 @@ func TestConverter(t *testing.T) {
 			expected: []map[string]*dynamodb.AttributeValue{
 				{
 					"a": &dynamodb.AttributeValue{S: aws.String("the")},
+					"c": &dynamodb.AttributeValue{S: aws.String("cork")},
+				},
+			},
+		},
+		{
+			name: "when specifying key columns, other columns are ignored",
+			input: strings.Join([]string{
+				"a,b,c",
+				`the,"red, wine",cork`,
+			}, "\n"),
+			config: NewConfiguration().AddKeyColumns("b", "c"),
+			expected: []map[string]*dynamodb.AttributeValue{
+				{
+					"b": &dynamodb.AttributeValue{S: aws.String("red, wine")},
 					"c": &dynamodb.AttributeValue{S: aws.String("cork")},
 				},
 			},
