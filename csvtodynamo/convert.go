@@ -160,8 +160,6 @@ func boolValue(s string) *dynamodb.AttributeValue {
 func mapValue(s string) *dynamodb.AttributeValue {
 	var av map[string]*dynamodb.AttributeValue
 	json.Unmarshal([]byte(s), &av)
-	//// transform to AttributeValue
-	//av, _ := dynamodbattribute.MarshalMap(x)
 	return (&dynamodb.AttributeValue{}).SetM(av)
 }
 

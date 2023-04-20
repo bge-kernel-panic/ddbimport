@@ -46,7 +46,7 @@ var inputFileFlag = flag.String("inputFile", "", "The local CSV file to upload t
 
 // Remote configuration.
 var stepFnRegionFlag = flag.String("stepFnRegion", "", "The AWS region of the ddbimport Step Function.")
-var installFlag = flag.Bool("ins dtall", false, "Set to install the ddbimport Step Function.")
+var installFlag = flag.Bool("install", false, "Set to install the ddbimport Step Function.")
 var remoteFlag = flag.Bool("remote", false, "Set when the import should be carried out using the ddbimport Step Function.")
 
 // Global configuration.
@@ -115,8 +115,8 @@ func main() {
 	if remoteFile && (*bucketRegionFlag == "" || *bucketNameFlag == "" || *bucketKeyFlag == "") {
 		printUsageAndExit("Must pass values for all of the bucketRegion, bucketName and bucketKey arguments if a localFile argument is omitted.")
 	}
-	if remoteFile && *deleteFlag {
-		printUsageAndExit("Delete only supported using local CSV for now")
+	if *remoteFlag && *deleteFlag {
+		printUsageAndExit("Delete only supported running locally for now")
 	}
 	if *remoteFlag {
 		if !remoteFile {
