@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	_ "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
 
 // Converter converts CSV to DynamoDB records.
