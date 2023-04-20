@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	_ "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
 
@@ -159,10 +158,10 @@ func boolValue(s string) *dynamodb.AttributeValue {
 }
 
 func mapValue(s string) *dynamodb.AttributeValue {
-	var x map[string]interface{}
-	json.Unmarshal([]byte(s), &x)
-	// transform to AttributeValue
-	av, _ := dynamodbattribute.MarshalMap(x)
+	var av map[string]*dynamodb.AttributeValue
+	json.Unmarshal([]byte(s), &av)
+	//// transform to AttributeValue
+	//av, _ := dynamodbattribute.MarshalMap(x)
 	return (&dynamodb.AttributeValue{}).SetM(av)
 }
 

@@ -40,7 +40,7 @@ func NewForDelete(region, tableName string) (bw BatchWriter, err error) {
 		Backoff:      NewBackoff(7),
 		client:       dynamodb.New(sess),
 		tableName:    tableName,
-		newOperation: putRequest,
+		newOperation: deleteRequest,
 	}
 	return
 }

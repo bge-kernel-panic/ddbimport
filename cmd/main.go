@@ -46,7 +46,7 @@ var inputFileFlag = flag.String("inputFile", "", "The local CSV file to upload t
 
 // Remote configuration.
 var stepFnRegionFlag = flag.String("stepFnRegion", "", "The AWS region of the ddbimport Step Function.")
-var installFlag = flag.Bool("install", false, "Set to install the ddbimport Step Function.")
+var installFlag = flag.Bool("ins dtall", false, "Set to install the ddbimport Step Function.")
 var remoteFlag = flag.Bool("remote", false, "Set when the import should be carried out using the ddbimport Step Function.")
 
 // Global configuration.
@@ -472,7 +472,7 @@ func importLocal(input func() (io.ReadCloser, error), inputName string, numericF
 		logger.Fatal("failed to create batch writer", zap.Error(err))
 	}
 
-	runBatch(concurrency, batchWriter, logger, duration, start, reader)
+	runBatch("put", concurrency, batchWriter, logger, duration, start, reader)
 }
 
 func deleteLocal(input func() (io.ReadCloser, error), inputName string, numericFields, booleanFields, mapFields []string, delimiter rune, tableRegion, tableName string, concurrency int) {
@@ -510,6 +510,8 @@ func deleteLocal(input func() (io.ReadCloser, error), inputName string, numericF
 		recordKeys = append(recordKeys, *element.AttributeName)
 	}
 
+	logger.Info("Found keys " + strings.Join(recordKeys, ","))
+
 	csvr := csv.NewReader(f)
 	csvr.Comma = delimiter
 	conf := csvtodynamo.NewConfiguration()
@@ -527,10 +529,10 @@ func deleteLocal(input func() (io.ReadCloser, error), inputName string, numericF
 		logger.Fatal("failed to create batch writer", zap.Error(err))
 	}
 
-	runBatch(concurrency, batchWriter, logger, duration, start, reader)
+	runBatch("del", concurrency, batchWriter, logger, duration, start, reader)
 }
 
-func runBatch(concurrency int, batchWriter batchwriter.BatchWriter, logger *zap.Logger, duration time.Duration, start time.Time, reader *csvtodynamo.Converter) {
+func runBatch(opType string, concurrency int, batchWriter batchwriter.BatchWriter, logger *zap.Logger, duration time.Duration, start time.Time, reader *csvtodynamo.Converter) {
 	var batchCount int64 = 1
 	var recordCount int64
 
@@ -550,7 +552,7 @@ func runBatch(concurrency int, batchWriter batchwriter.BatchWriter, logger *zap.
 				recordCount := atomic.AddInt64(&recordCount, int64(len(batch)))
 				if batchCount := atomic.AddInt64(&batchCount, 1); batchCount%100 == 0 {
 					duration = time.Since(start)
-					logger.Info("progress", zap.Int("workerIndex", workerIndex), zap.Int64("records", recordCount), zap.Int("rps", int(float64(recordCount)/duration.Seconds())))
+					logger.Info("progress", zap.String("op", opType), zap.Int("workerIndex", workerIndex), zap.Int64("records", recordCount), zap.Int("rps", int(float64(recordCount)/duration.Seconds())))
 				}
 			}
 		}(i)

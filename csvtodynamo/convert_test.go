@@ -77,17 +77,22 @@ func TestConverter(t *testing.T) {
 		{
 			name: "maps can be identified",
 			input: strings.Join([]string{
-				"one,three",
-				`"{""one"":1,""two"":""2""}","{""three"":3}"`,
+				"one,three,four",
+				`"{""one"":{""N"":""1""},""two"":{""S"":""2""}}","{""three"":{""N"":""3""}}","{""four"":{""M"":{""five"":{""N"":""5""}}}}"`,
 			}, "\n"),
-			config: NewConfiguration().AddMapKeys("one"),
+			config: NewConfiguration().AddMapKeys("one", "four"),
 			expected: []map[string]*dynamodb.AttributeValue{
 				{
 					"one": &dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
-						"one": &dynamodb.AttributeValue{N: aws.String("1")},
-						"two": &dynamodb.AttributeValue{S: aws.String("2")},
+						"one": {N: aws.String("1")},
+						"two": {S: aws.String("2")},
 					}},
-					"three": &dynamodb.AttributeValue{S: aws.String(`{"three":3}`)},
+					"three": &dynamodb.AttributeValue{S: aws.String(`{"three":{"N":"3"}}`)},
+					"four": &dynamodb.AttributeValue{M: map[string]*dynamodb.AttributeValue{
+						"four": {M: map[string]*dynamodb.AttributeValue{
+							"five": {N: aws.String("5")},
+						}},
+					}},
 				},
 			},
 		},
