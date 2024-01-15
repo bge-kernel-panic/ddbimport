@@ -1,3 +1,7 @@
 *.csv.zip
 package.zip
 dist
+/ddbimport
+
+/.idea
+*.iml
