@@ -1,6 +1,7 @@
 package csvtodynamo
 
 import (
+	"encoding/base64"
 	"encoding/csv"
 	"errors"
 	"io"
@@ -13,6 +14,8 @@ import (
 )
 
 func TestConverter(t *testing.T) {
+	const binAsBase64 = "F9vBa7O+Ee6/7gJCrGMAFA=="
+	bin, _ := base64.StdEncoding.DecodeString(binAsBase64)
 	var tests = []struct {
 		name          string
 		input         string
@@ -93,6 +96,20 @@ func TestConverter(t *testing.T) {
 							"five": {N: aws.String("5")},
 						}},
 					}},
+				},
+			},
+		},
+		{
+			name: "binary can be identified",
+			input: strings.Join([]string{
+				"one,two",
+				"1,\"F9vBa7O+Ee6/7gJCrGMAFA==\"",
+			}, "\n"),
+			config: NewConfiguration().AddBinKeys("two"),
+			expected: []map[string]*dynamodb.AttributeValue{
+				{
+					"one": &dynamodb.AttributeValue{S: aws.String("1")},
+					"two": &dynamodb.AttributeValue{B: bin},
 				},
 			},
 		},
