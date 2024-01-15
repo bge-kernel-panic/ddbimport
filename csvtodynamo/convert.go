@@ -1,8 +1,10 @@
 package csvtodynamo
 
 import (
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
+
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
@@ -57,6 +59,13 @@ func (conf *Configuration) AddBoolKeys(s ...string) *Configuration {
 func (conf *Configuration) AddMapKeys(s ...string) *Configuration {
 	for _, k := range s {
 		conf.KeyToConverter[k] = mapValue
+	}
+	return conf
+}
+
+func (conf *Configuration) AddBinKeys(s ...string) *Configuration {
+	for _, k := range s {
+		conf.KeyToConverter[k] = binValue
 	}
 	return conf
 }
@@ -160,6 +169,11 @@ func mapValue(s string) *dynamodb.AttributeValue {
 	var av map[string]*dynamodb.AttributeValue
 	json.Unmarshal([]byte(s), &av)
 	return (&dynamodb.AttributeValue{}).SetM(av)
+}
+
+func binValue(s string) *dynamodb.AttributeValue {
+	b, _ := base64.StdEncoding.DecodeString(s)
+	return (&dynamodb.AttributeValue{}).SetB(b)
 }
 
 var trueValue = (&dynamodb.AttributeValue{}).SetBOOL(true)

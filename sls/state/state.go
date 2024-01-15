@@ -33,6 +33,8 @@ type Source struct {
 	Key           string   `json:"key"`
 	NumericFields []string `json:"numFlds"`
 	BooleanFields []string `json:"boolFlds"`
+	MapFields     []string `json:"mapFlds"`
+	BinaryFields  []string `json:"binFilds"`
 	Delimiter     string   `json:"delim"`
 }
 

@@ -13,7 +13,7 @@ deploy: clean build
 statik:
 	mkdir -p ./.serverless
 	go get github.com/rakyll/statik
-	statik -src=./.serverless
+	./statik -src=./.serverless
 
 install-plugins:
 	sls plugin install -n serverless-step-functions

@@ -37,6 +37,8 @@ func Handler(ctx context.Context, req state.ImportInput) (resp Response, err err
 		zap.Int64("sourceToRange", req.Range[1]))
 	logger.Info("starting", zap.Strings("numericFields", req.Source.NumericFields),
 		zap.Strings("booleanFields", req.Source.BooleanFields),
+		zap.Strings("mapFields", req.Source.MapFields),
+		zap.Strings("binaryFields", req.Source.BinaryFields),
 		zap.Strings("cols", req.Columns),
 		zap.String("delimiter", req.Source.Delimiter))
 
@@ -68,6 +70,8 @@ func Handler(ctx context.Context, req state.ImportInput) (resp Response, err err
 	}
 	conf.AddNumberKeys(req.Source.NumericFields...)
 	conf.AddBoolKeys(req.Source.BooleanFields...)
+	conf.AddMapKeys(req.Source.MapFields...)
+	conf.AddBinKeys(req.Source.BinaryFields...)
 	reader, err := csvtodynamo.NewConverter(csvr, conf)
 	if err != nil {
 		logger.Error("failed to create CSV reader", zap.Error(err))

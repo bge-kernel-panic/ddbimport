@@ -53,6 +53,7 @@ var remoteFlag = flag.Bool("remote", false, "Set when the import should be carri
 var numericFieldsFlag = flag.String("numericFields", "", "A comma separated list of fields that are numeric.")
 var booleanFieldsFlag = flag.String("booleanFields", "", "A comma separated list of fields that are boolean.")
 var mapFieldsFlag = flag.String("mapFields", "", "A comma separated list of fields that are maps.")
+var binaryFieldsFlag = flag.String("binaryFields", "", "A comma separated list of fields that are binary.")
 var delimiterFlag = flag.String("delimiter", "comma", "The delimiter of the CSV file. Use the string 'tab' or 'comma'")
 var concurrencyFlag = flag.Int("concurrency", 8, "Number of imports to execute in parallel.")
 
@@ -107,6 +108,7 @@ func main() {
 	numericFields := strings.Split(*numericFieldsFlag, ",")
 	booleanFields := strings.Split(*booleanFieldsFlag, ",")
 	mapFields := strings.Split(*mapFieldsFlag, ",")
+	binaryFields := strings.Split(*binaryFieldsFlag, ",")
 	localFile := *inputFileFlag != ""
 	remoteFile := *bucketRegionFlag != "" || *bucketNameFlag != "" || *bucketKeyFlag != ""
 	if localFile && remoteFile {
@@ -133,6 +135,8 @@ func main() {
 				Key:           *bucketKeyFlag,
 				NumericFields: numericFields,
 				BooleanFields: booleanFields,
+				MapFields:     mapFields,
+				BinaryFields:  binaryFields,
 				Delimiter:     string(delimiter(*delimiterFlag)),
 			},
 			Configuration: state.Configuration{
@@ -156,9 +160,9 @@ func main() {
 		input = func() (io.ReadCloser, error) { return s3Get(*bucketRegionFlag, *bucketNameFlag, *bucketKeyFlag) }
 	}
 	if *deleteFlag {
-		deleteLocal(input, inputName, numericFields, booleanFields, mapFields, delimiter(*delimiterFlag), *tableRegionFlag, *tableNameFlag, *concurrencyFlag)
+		deleteLocal(input, inputName, numericFields, booleanFields, mapFields, binaryFields, delimiter(*delimiterFlag), *tableRegionFlag, *tableNameFlag, *concurrencyFlag)
 	} else {
-		importLocal(input, inputName, numericFields, booleanFields, mapFields, delimiter(*delimiterFlag), *tableRegionFlag, *tableNameFlag, *concurrencyFlag)
+		importLocal(input, inputName, numericFields, booleanFields, mapFields, binaryFields, delimiter(*delimiterFlag), *tableRegionFlag, *tableNameFlag, *concurrencyFlag)
 	}
 }
 
@@ -439,7 +443,7 @@ func s3Get(region, bucket, key string) (io.ReadCloser, error) {
 	return goo.Body, err
 }
 
-func importLocal(input func() (io.ReadCloser, error), inputName string, numericFields, booleanFields, mapFields []string, delimiter rune, tableRegion, tableName string, concurrency int) {
+func importLocal(input func() (io.ReadCloser, error), inputName string, numericFields, booleanFields, mapFields, binaryFields []string, delimiter rune, tableRegion, tableName string, concurrency int) {
 	logger := log.Default.With(zap.String("input", inputName),
 		zap.String("tableRegion", tableRegion),
 		zap.String("tableName", tableName))
@@ -462,6 +466,7 @@ func importLocal(input func() (io.ReadCloser, error), inputName string, numericF
 	conf.AddNumberKeys(numericFields...)
 	conf.AddBoolKeys(booleanFields...)
 	conf.AddMapKeys(mapFields...)
+	conf.AddBinKeys(binaryFields...)
 	reader, err := csvtodynamo.NewConverter(csvr, conf)
 	if err != nil {
 		logger.Fatal("failed to create CSV reader", zap.Error(err))
@@ -475,7 +480,7 @@ func importLocal(input func() (io.ReadCloser, error), inputName string, numericF
 	runBatch("put", concurrency, batchWriter, logger, duration, start, reader)
 }
 
-func deleteLocal(input func() (io.ReadCloser, error), inputName string, numericFields, booleanFields, mapFields []string, delimiter rune, tableRegion, tableName string, concurrency int) {
+func deleteLocal(input func() (io.ReadCloser, error), inputName string, numericFields, booleanFields, mapFields, binaryFields []string, delimiter rune, tableRegion, tableName string, concurrency int) {
 	logger := log.Default.With(zap.String("input", inputName),
 		zap.String("tableRegion", tableRegion),
 		zap.String("tableName", tableName))
@@ -518,6 +523,7 @@ func deleteLocal(input func() (io.ReadCloser, error), inputName string, numericF
 	conf.AddNumberKeys(numericFields...)
 	conf.AddBoolKeys(booleanFields...)
 	conf.AddMapKeys(mapFields...)
+	conf.AddBinKeys(binaryFields...)
 	conf.AddKeyColumns(recordKeys...)
 	reader, err := csvtodynamo.NewConverter(csvr, conf)
 	if err != nil {

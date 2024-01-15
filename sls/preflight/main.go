@@ -24,6 +24,8 @@ func Handler(ctx context.Context, req state.State) (resp state.State, err error)
 		zap.String("tableName", req.Target.TableName))
 	logger.Info("starting", zap.Strings("numericFields", req.Source.NumericFields),
 		zap.Strings("booleanFields", req.Source.BooleanFields),
+		zap.Strings("mapFields", req.Source.MapFields),
+		zap.Strings("binFields", req.Source.BinaryFields),
 		zap.String("delimiter", req.Source.Delimiter))
 
 	if req.Source.Delimiter == "" {
